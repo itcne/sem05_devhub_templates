@@ -1,0 +1,526 @@
+name: Combined Build, Release and Publish
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      push_image:
+        description: 'Push image to registry'
+        required: false
+        default: true
+        type: boolean
+      version:
+        description: 'Semantic version to use for tagging (without v prefix)'
+        required: false
+        type: string
+      version_tag:
+        description: 'Full version tag (with v prefix)'
+        required: false
+        type: string
+
+env:
+  REGISTRY: {{ values.registry }}
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Semantic Release Job
+  semantic-release:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[skip ci]')
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write
+      actions: write
+    outputs:
+      new_version: ${{ steps.semantic.outputs.new_version }}
+      version_tag: ${{ steps.semantic.outputs.version_tag }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Use a token with write permissions to the repository
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Install semantic-release
+        run: |
+          npm install -g semantic-release @semantic-release/changelog @semantic-release/git
+
+      - name: Create semantic-release config
+        run: |
+          cat > .releaserc.json << 'EOF'
+          {
+            "branches": ["main"],
+            "repositoryUrl": "https://github.com/${{ github.repository }}.git",
+            "tagFormat": "v${version}",
+            "plugins": [
+              "@semantic-release/commit-analyzer",
+              "@semantic-release/release-notes-generator",
+              "@semantic-release/changelog",
+              "@semantic-release/github",
+              [
+                "@semantic-release/git",
+                {
+                  "assets": ["CHANGELOG.md"],
+                  "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+                }
+              ]
+            ]
+          }
+          EOF
+
+      - name: Run semantic-release
+        id: semantic
+        env:
+          # Use a fine-grained PAT token with proper permissions
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
+        run: |
+          # Run semantic-release
+          set +e
+          output=$(npx semantic-release --dry-run false --debug)
+          semantic_exit_code=$?
+          set -e
+          
+          echo "$output"
+          
+          # Parse version from output using regex
+          if echo "$output" | grep -q "Published release"; then
+            # Extract version directly from output message
+            version=$(echo "$output" | grep "Published release" | sed -E 's/.*Published release ([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+            if [ -n "$version" ]; then
+              echo "new_version=$version" >> $GITHUB_OUTPUT
+              echo "version_tag=v$version" >> $GITHUB_OUTPUT
+              echo "::notice::New version released: v$version"
+            else
+              # Fallback to git tag
+              latest_tag=$(git describe --tags --abbrev=0)
+              clean_version=${latest_tag#v}
+              echo "new_version=$clean_version" >> $GITHUB_OUTPUT
+              echo "version_tag=$latest_tag" >> $GITHUB_OUTPUT
+              echo "::notice::New version released: $latest_tag"
+            fi
+          else
+            echo "::notice::No new version released."
+          fi
+
+  # Job to setup common resources and extract metadata
+  setup:
+    runs-on: ubuntu-latest
+    needs: [semantic-release]
+    if: always() && (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
+    outputs:
+      tags: ${{ steps.meta.outputs.tags }}
+      labels: ${{ steps.meta.outputs.labels }}
+      json: ${{ steps.meta.outputs.json }}
+      version: ${{ steps.version_info.outputs.version }}
+      version_tag: ${{ steps.version_info.outputs.version_tag }}
+      image_name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+      build_tag: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:build-${{ github.run_number }}
+      is_release: ${{ steps.version_info.outputs.is_release }}
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version information
+        id: version_info
+        run: |
+          # Initialize variables
+          version=""
+          version_tag=""
+          is_release="false"
+          
+          # Case 1: Manual input from workflow_dispatch
+          if [ -n "${{ inputs.version }}" ]; then
+            version="${{ inputs.version }}"
+            version_tag="${{ inputs.version_tag || format('v{0}', inputs.version) }}"
+            is_release="true"
+            echo "Using manually specified version: $version_tag"
+          
+          # Case 2: Version from semantic-release output
+          elif [ -n "${{ needs.semantic-release.outputs.new_version }}" ]; then
+            version="${{ needs.semantic-release.outputs.new_version }}"
+            version_tag="${{ needs.semantic-release.outputs.version_tag }}"
+            is_release="true"
+            echo "Using version from semantic-release: $version_tag"
+          
+          # Case 3: Version from git tag
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            version_tag="${GITHUB_REF#refs/tags/}"
+            version="${version_tag#v}"
+            is_release="true"
+            echo "Using version from git tag: $version_tag"
+          
+          # Case 4: Development build (branch push)
+          else
+            echo "This is not a release build"
+          fi
+          
+          # Set outputs
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "version_tag=$version_tag" >> $GITHUB_OUTPUT
+          echo "is_release=$is_release" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=${{ steps.version_info.outputs.version }},enable=${{ steps.version_info.outputs.is_release == 'true' }}
+            type=raw,value=${{ steps.version_info.outputs.version_tag }},enable=${{ steps.version_info.outputs.is_release == 'true' }}
+
+  # Job to build the execution environment
+  build:
+    runs-on: ubuntu-latest
+    needs: setup
+    outputs:
+      build_tag: ${{ needs.setup.outputs.build_tag }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install ansible-builder
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible-builder
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Execution Environment
+        run: |
+          ansible-builder build \
+            --tag ${{ needs.setup.outputs.build_tag }} \
+            --container-runtime docker \
+            --verbosity 2
+
+      - name: Save image to artifact
+        run: |
+          mkdir -p /tmp/image
+          docker save ${{ needs.setup.outputs.build_tag }} -o /tmp/image/image.tar
+
+      - name: Upload image as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/image/image.tar
+          retention-days: 1
+
+  # Job to test the execution environment
+  test:
+    runs-on: ubuntu-latest
+    needs: [setup, build]
+    
+    steps:
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/image
+
+      - name: Load Docker image
+        run: |
+          docker load -i /tmp/image/image.tar
+
+      - name: Test Execution Environment
+        run: |
+          # Test basic functionality
+          docker run --rm ${{ needs.setup.outputs.build_tag }} ansible --version
+          docker run --rm ${{ needs.setup.outputs.build_tag }} ansible-galaxy --version
+          
+          # Test that collections are available (if any are specified)
+          docker run --rm ${{ needs.setup.outputs.build_tag }} ansible-galaxy collection list
+
+  # Job to scan the image for vulnerabilities
+  scan:
+    runs-on: ubuntu-latest
+    needs: [setup, build]
+    permissions:
+      contents: read
+      security-events: write
+      
+    steps:
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/image
+
+      - name: Load Docker image
+        run: |
+          docker load -i /tmp/image/image.tar
+
+      - name: Cache Trivy DB
+        uses: actions/cache@v4
+        with:
+          path: .cache/trivy
+          key: cache-trivy-${{ github.run_id }}
+          restore-keys: |
+            cache-trivy-
+
+      # First scan with table output to print findings
+      - name: Scan image for vulnerabilities (Table Output)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ needs.setup.outputs.build_tag }}
+          format: 'table'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          cache-dir: .cache/trivy
+          
+      # Second scan with SARIF output for GitHub Security
+      - name: Generate SARIF report
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ needs.setup.outputs.build_tag }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          cache-dir: .cache/trivy
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+          category: 'trivy'
+        continue-on-error: true
+
+  # Job to generate SBOM for the image
+  sbom:
+    runs-on: ubuntu-latest
+    needs: [setup, build]
+    
+    steps:
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/image
+
+      - name: Load Docker image
+        run: |
+          docker load -i /tmp/image/image.tar
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ needs.setup.outputs.build_tag }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+
+      - name: Upload SBOM as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.spdx.json
+
+  # Job to push the image to the registry
+  publish:
+    runs-on: ubuntu-latest
+    needs: [setup, build, test, scan, sbom]
+    if: github.event_name != 'workflow_dispatch' || inputs.push_image
+    permissions:
+      contents: read
+      packages: write
+      
+    steps:
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/image
+
+      - name: Load Docker image
+        run: |
+          docker load -i /tmp/image/image.tar
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag and push images to GHCR
+        run: |
+          # Tag the built image with all metadata tags
+          echo "${{ needs.setup.outputs.tags }}" | while read -r tag; do
+            echo "Tagging: $tag"
+            docker tag ${{ needs.setup.outputs.build_tag }} "$tag"
+            echo "Pushing: $tag"
+            docker push "$tag"
+          done
+          
+          # Add specific semantic version tags if this is a release
+          if [ "${{ needs.setup.outputs.is_release }}" == "true" ] && [ -n "${{ needs.setup.outputs.version }}" ]; then
+            echo "Adding semantic version tags..."
+            
+            # Create semver-style tags (major.minor.patch, major.minor, major)
+            VERSION="${{ needs.setup.outputs.version }}"
+            MAJOR=$(echo $VERSION | cut -d. -f1)
+            MINOR=$(echo $VERSION | cut -d. -f2)
+            
+            echo "Tagging: ${{ needs.setup.outputs.image_name }}:$VERSION"
+            docker tag ${{ needs.setup.outputs.build_tag }} "${{ needs.setup.outputs.image_name }}:$VERSION"
+            docker push "${{ needs.setup.outputs.image_name }}:$VERSION"
+            
+            echo "Tagging: ${{ needs.setup.outputs.image_name }}:$MAJOR.$MINOR"
+            docker tag ${{ needs.setup.outputs.build_tag }} "${{ needs.setup.outputs.image_name }}:$MAJOR.$MINOR"
+            docker push "${{ needs.setup.outputs.image_name }}:$MAJOR.$MINOR"
+            
+            echo "Tagging: ${{ needs.setup.outputs.image_name }}:$MAJOR"
+            docker tag ${{ needs.setup.outputs.build_tag }} "${{ needs.setup.outputs.image_name }}:$MAJOR"
+            docker push "${{ needs.setup.outputs.image_name }}:$MAJOR"
+            
+            # Always update latest on semantic release
+            echo "Tagging: ${{ needs.setup.outputs.image_name }}:latest"
+            docker tag ${{ needs.setup.outputs.build_tag }} "${{ needs.setup.outputs.image_name }}:latest"
+            docker push "${{ needs.setup.outputs.image_name }}:latest"
+          fi
+          
+          echo "Successfully pushed to GitHub Container Registry:"
+          echo "Repository: ${{ needs.setup.outputs.image_name }}"
+          echo "Available at: https://github.com/${{ github.repository }}/pkgs/container/$(basename ${{ env.IMAGE_NAME }})"
+
+  # Job to update release notes when this is triggered by a release event or tag push
+  update-release:
+    runs-on: ubuntu-latest
+    needs: [setup, publish]
+    if: needs.setup.outputs.is_release == 'true'
+    permissions:
+      contents: write
+      issues: write
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download SBOM artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom
+          path: ./
+
+      - name: Update release notes
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const tag_name = '${{ needs.setup.outputs.version_tag }}';
+            const version = '${{ needs.setup.outputs.version }}';
+            
+            // Find the release by tag name
+            const releases = await github.rest.repos.listReleases({
+              owner,
+              repo
+            });
+            
+            let releaseId = null;
+            for (const release of releases.data) {
+              if (release.tag_name === tag_name) {
+                releaseId = release.id;
+                break;
+              }
+            }
+            
+            // If no release exists for this tag, create one
+            if (!releaseId) {
+              console.log(`Creating new release for tag ${tag_name}`);
+              const newRelease = await github.rest.repos.createRelease({
+                owner,
+                repo,
+                tag_name,
+                name: `Release ${tag_name}`,
+                generate_release_notes: true
+              });
+              releaseId = newRelease.data.id;
+            }
+            
+            // Get current release to append to existing notes
+            const currentRelease = await github.rest.repos.getRelease({
+              owner,
+              repo,
+              release_id: releaseId
+            });
+            
+            const additionalNotes = `
+            
+            ## 📦 Container Image
+            
+            \`\`\`bash
+            docker pull ghcr.io/${owner}/${repo}:${tag_name}
+            \`\`\`
+            
+            ## 🚀 Usage
+            
+            ### With ansible-navigator
+            \`\`\`bash
+            ansible-navigator run playbook.yml --execution-environment-image ghcr.io/${owner}/${repo}:${tag_name}
+            \`\`\`
+            
+            ## 🔒 Security
+            
+            This image has been scanned for vulnerabilities and includes an SBOM (Software Bill of Materials) attached to this release.
+            `;
+            
+            // Update release with additional notes
+            await github.rest.repos.updateRelease({
+              owner,
+              repo,
+              release_id: releaseId,
+              body: (currentRelease.data.body || '') + additionalNotes,
+            });
+            
+            // Upload SBOM as release asset
+            const fs = require('fs');
+            const sbomPath = './sbom.spdx.json';
+            
+            if (fs.existsSync(sbomPath)) {
+              console.log('Uploading SBOM as release asset');
+              
+              await github.rest.repos.uploadReleaseAsset({
+                owner,
+                repo,
+                release_id: releaseId,
+                name: 'sbom.spdx.json',
+                data: fs.readFileSync(sbomPath)
+              });
+            }

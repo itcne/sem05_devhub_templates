@@ -1,0 +1,204 @@
+name: PR Testing
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Job to validate conventional commits
+  check-commits:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install commitlint
+        run: |
+          npm install -g @commitlint/cli @commitlint/config-conventional
+
+      - name: Check PR title
+        run: |
+          echo "${{ github.event.pull_request.title }}" | npx commitlint
+          if [ $? -ne 0 ]; then
+            echo "::error::PR title does not follow conventional commit format. See https://www.conventionalcommits.org/ for more information."
+            exit 1
+          fi
+
+      - name: Check Commit Messages
+        run: |
+          # Get PR commits
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # For pull requests, get the commits in the PR
+            echo "Checking commits in pull request..."
+            git fetch origin ${{ github.event.pull_request.base.ref }} --depth=1
+            COMMIT_RANGE="origin/${{ github.event.pull_request.base.ref }}..HEAD"
+          else
+            # For workflow dispatch or other triggers, just check the latest commit
+            echo "Checking latest commit..."
+            COMMIT_RANGE="HEAD~1..HEAD"
+          fi
+          
+          # Check all commits in the range
+          EXIT_CODE=0
+          INVALID_COMMITS=""
+          
+          for commit in $(git log $COMMIT_RANGE --format="%H"); do
+            COMMIT_MSG=$(git log -1 --format="%s" $commit)
+            echo "Checking commit: $COMMIT_MSG"
+            echo "$COMMIT_MSG" | npx commitlint
+            if [ $? -ne 0 ]; then
+              EXIT_CODE=1
+              INVALID_COMMITS="$INVALID_COMMITS\n- $COMMIT_MSG ($(git log -1 --format="%h" $commit))"
+            fi
+          done
+          
+          if [ $EXIT_CODE -ne 0 ]; then
+            printf "::error::The following commits do not follow conventional commit format:%s\n\nPlease follow the conventional commit format: <type>[optional scope]: <description>\nSee https://www.conventionalcommits.org/ for more information.\n" "$INVALID_COMMITS"
+            exit 1
+          fi
+
+  # Job to setup common resources and extract metadata
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      tags: ${{ steps.meta.outputs.tags }}
+      labels: ${{ steps.meta.outputs.labels }}
+      json: ${{ steps.meta.outputs.json }}
+      image_name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+      build_tag: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:build-${{ github.run_number }}
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+
+  # Job to build the execution environment
+  build:
+    runs-on: ubuntu-latest
+    needs: setup
+    outputs:
+      build_tag: ${{ needs.setup.outputs.build_tag }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install ansible-builder
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible-builder
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Execution Environment
+        run: |
+          ansible-builder build \
+            --tag ${{ needs.setup.outputs.build_tag }} \
+            --container-runtime docker \
+            --verbosity 2
+
+      - name: Save image to artifact
+        run: |
+          mkdir -p /tmp/image
+          docker save ${{ needs.setup.outputs.build_tag }} -o /tmp/image/image.tar
+
+      - name: Upload image as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/image/image.tar
+          retention-days: 1
+
+  # Job to test the execution environment
+  test:
+    runs-on: ubuntu-latest
+    needs: [setup, build]
+    
+    steps:
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/image
+
+      - name: Load Docker image
+        run: |
+          docker load -i /tmp/image/image.tar
+
+      - name: Test Execution Environment
+        run: |
+          # Test basic functionality
+          docker run --rm ${{ needs.setup.outputs.build_tag }} ansible --version
+          docker run --rm ${{ needs.setup.outputs.build_tag }} ansible-galaxy --version
+          
+          # Test that collections are available (if any are specified)
+          docker run --rm ${{ needs.setup.outputs.build_tag }} ansible-galaxy collection list
+
+  # Job to scan the image for vulnerabilities
+  scan:
+    runs-on: ubuntu-latest
+    needs: [setup, build]
+    permissions:
+      contents: read
+      security-events: write
+      
+    steps:
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/image
+
+      - name: Load Docker image
+        run: |
+          docker load -i /tmp/image/image.tar
+
+      - name: Cache Trivy DB
+        uses: actions/cache@v4
+        with:
+          path: .cache/trivy
+          key: cache-trivy-${{ github.run_id }}
+          restore-keys: |
+            cache-trivy-
+
+      # Only run table format scan to show findings in the PR
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ needs.setup.outputs.build_tag }}
+          format: 'table'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '0'  # Don't fail the build on vulnerabilities
+          cache-dir: .cache/trivy
+          
+      # Note: We're not generating SARIF or uploading to GitHub Security for PR tests
+      # Security findings are directly visible in the workflow logs

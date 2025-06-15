@@ -1,0 +1,7 @@
+apiVersion: backstage.io/v1alpha1
+kind: Location
+metadata:
+  name: ansible-ee-template
+spec:
+  type: url
+  target: https://github.com/itcne/ansible-ee-blueprint/blob/main/template.yaml

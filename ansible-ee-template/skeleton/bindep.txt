@@ -1,0 +1,10 @@
+# System packages required for this execution environment
+
+# Core system dependencies - don't remove these
+gcc [platform:rpm]
+python3-devel [platform:rpm]
+python3-pip [platform:rpm]
+
+{% for package in values.systemPackages %}
+{{ package }} [platform:rpm]
+{% endfor %}

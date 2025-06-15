@@ -1,0 +1,134 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: ansible-execution-environment-template
+  title: Ansible Execution Environment
+  description: Create a custom Ansible Execution Environment based on UBI9 Python 3.12
+  tags:
+    - ansible
+    - execution-environment
+    - container
+    - automation
+  annotations:
+    github.com/project-slug: itcne/ansible-ee-blueprint
+    backstage.io/techdocs-ref: dir:.
+spec:
+  owner: platform-engineering
+  type: service
+
+  parameters:
+    - title: Provide Execution Environment Information
+      required:
+        - name
+        - description
+        - owner
+      properties:
+        name:
+          title: Name
+          type: string
+          description: Name of the execution environment
+          ui:autofocus: true
+          pattern: '^[a-z0-9-]+$'
+          minLength: 3
+          maxLength: 40
+        description:
+          title: Description
+          type: string
+          description: A brief description of this execution environment's purpose
+        owner:
+          title: Owner
+          type: string
+          description: Owner of the execution environment
+          ui:field: OwnerPicker
+          ui:options:
+            allowedKinds:
+              - Group
+        requiredCollections:
+          title: Required Ansible Collections
+          type: array
+          description: Ansible Galaxy collections to include
+          default: []
+          items:
+            type: string
+            description: Collection name in format namespace.collection
+        requiredPythonPackages:
+          title: Required Python Packages
+          type: array
+          description: Python packages to include
+          default: []
+          items:
+            type: string
+            description: Package name with optional version constraint (e.g., boto3>=1.24.0)
+        systemPackages:
+          title: System Packages
+          type: array
+          description: RPM/DEB packages to install
+          default: []
+          items:
+            type: string
+            description: Package name
+        baseImage:
+          title: Base Image
+          type: string
+          description: Base image to use (leave default unless you know what you're doing)
+          default: registry.access.redhat.com/ubi9/python-312-minimal:9.6-1747319120
+        
+    - title: CI/CD Options
+      properties:
+        enableAutomatedBuilds:
+          title: Enable Automated Builds
+          description: Automatically build image on push with GitHub Actions
+          type: boolean
+          default: true
+        registry:
+          title: Container Registry
+          description: Where to publish the container image
+          type: string
+          default: ghcr.io
+          enum:
+            - ghcr.io
+            - docker.io
+            - quay.io
+
+  steps:
+    - id: template
+      name: Fetch Base Template
+      action: fetch:template
+      input:
+        url: ./skeleton
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          requiredCollections: ${{ parameters.requiredCollections }}
+          requiredPythonPackages: ${{ parameters.requiredPythonPackages }}
+          systemPackages: ${{ parameters.systemPackages }}
+          baseImage: ${{ parameters.baseImage }}
+          enableAutomatedBuilds: ${{ parameters.enableAutomatedBuilds }}
+          registry: ${{ parameters.registry }}
+
+    - id: publish
+      name: Publish to GitHub
+      action: publish:github
+      input:
+        allowedHosts: ['github.com']
+        description: ${{ parameters.description }}
+        repoUrl: github.com?owner=itcne&repo=${{ parameters.name }}
+        defaultBranch: main
+        repoVisibility: public
+        protectDefaultBranch: false
+
+    - id: register
+      name: Register
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps.publish.output.repoContentsUrl }}
+        catalogInfoPath: '/catalog-info.yaml'
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps.publish.output.remoteUrl }}
+      - title: Open in catalog
+        icon: catalog
+        entityRef: ${{ steps.register.output.entityRef }}

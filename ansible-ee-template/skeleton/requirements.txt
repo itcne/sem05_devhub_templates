@@ -1,0 +1,8 @@
+# Python dependencies for Ansible Execution Environment
+
+# Core dependencies - don't remove these
+jmespath>=1.0.1
+
+{% for package in values.requiredPythonPackages %}
+{{ package }}
+{% endfor %}

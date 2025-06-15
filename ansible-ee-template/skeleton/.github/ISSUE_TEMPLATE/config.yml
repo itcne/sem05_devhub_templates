@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ansible Community Forum
+    url: https://forum.ansible.com/
+    about: Ask questions and discuss Ansible topics with the community
+  - name: Ansible Documentation
+    url: https://docs.ansible.com/
+    about: Official Ansible documentation and guides
+  - name: Ansible Builder Documentation
+    url: https://ansible-builder.readthedocs.io/
+    about: Official documentation for Ansible Builder

@@ -1,0 +1,79 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommitTypeAll(chore)"
+  ],
+  "labels": ["dependencies", "automated", "renovate"],
+  "timezone": "UTC",
+  "schedule": ["before 6am on monday"],
+  "prConcurrentLimit": 3,
+  "prHourlyLimit": 2,
+  "separateMinorPatch": true,
+  "packageRules": [
+    {
+      "description": "Python dependencies",
+      "matchFiles": ["requirements.txt"],
+      "groupName": "python dependencies",
+      "labels": ["python", "dependencies", "deps:python"]
+    },
+    {
+      "description": "Ansible collections",
+      "matchFiles": ["requirements.yml"],
+      "groupName": "ansible collections",
+      "labels": ["ansible", "collections", "dependencies", "deps:ansible"]
+    },
+    {
+      "description": "GitHub Actions - use commit hash",
+      "matchManagers": ["github-actions"],
+      "groupName": "github actions",
+      "automerge": true,
+      "pinDigests": true,
+      "labels": ["github-actions", "dependencies", "deps:actions"]
+    },
+    {
+      "description": "Base image - monthly updates",
+      "matchDatasources": ["docker"],
+      "matchPackagePatterns": ["^registry\\.access\\.redhat\\.com/ubi9/"],
+      "labels": ["base-image", "dependencies", "deps:docker"]
+    },
+    {
+      "description": "Major updates require review",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "labels": ["major-update", "dependencies", "breaking-change"]
+    },
+    {
+      "description": "Security vulnerability fixes",
+      "matchPackagePatterns": [".*"],
+      "prPriority": 20,
+      "labels": ["security", "vulnerability", "dependencies"]
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security", "vulnerability"]
+  },
+  "customManagers": [
+    {
+      "description": "Ansible components in execution-environment.yml",
+      "customType": "regex",
+      "fileMatch": ["execution-environment.yml"],
+      "matchStrings": [
+        "package_pip:\\s*(?<depName>ansible-core|ansible-runner)[~>=]+(?<currentValue>\\S+)"
+      ],
+      "datasourceTemplate": "pypi",
+      "versioningTemplate": "pep440"
+    },
+    {
+      "description": "Base image in execution-environment.yml",
+      "customType": "regex",
+      "fileMatch": ["execution-environment.yml"],
+      "matchStrings": [
+        "\\s+base_image:\\s*\"?(?<depName>registry\\.access\\.redhat\\.com\\/ubi9\\/[^:\"]+):(?<currentValue>[^\"]+)\"?"
+      ],
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "docker"
+    }
+  ]
+}
