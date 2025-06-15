@@ -3,4 +3,6 @@
 # Core dependencies - don't remove these
 jmespath>=1.0.1
 
-${{ values.requiredPythonPackages.join('\n') }}
+{% for package in values.requiredPythonPackages %}
+{{ package }}
+{% endfor %}

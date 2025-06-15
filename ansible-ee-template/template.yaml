@@ -9,7 +9,6 @@ metadata:
     - execution-environment
     - container
     - automation
-    - github-actions
   annotations:
     github.com/project-slug: itcne/ansible-ee-blueprint
     backstage.io/techdocs-ref: dir:.
@@ -83,13 +82,10 @@ spec:
           default: true
         registry:
           title: Container Registry
-          description: Where to publish the container image (configures the CI/CD workflow)
+          description: Where to publish the container image
           type: string
           default: ghcr.io
-          enum:
-            - ghcr.io
-            - docker.io
-            - quay.io
+          const: ghcr.io
 
   steps:
     - id: template
@@ -107,15 +103,6 @@ spec:
           baseImage: ${{ parameters.baseImage }}
           enableAutomatedBuilds: ${{ parameters.enableAutomatedBuilds }}
           registry: ${{ parameters.registry }}
-          
-    # Update GitHub workflow with correct registry
-    - id: update_workflow
-      name: Update GitHub Workflow
-      action: fs:write
-      input:
-        files:
-          - path: ${{ steps.template.output.path }}/.github/workflows/ci.yml
-            content: ${{ file.read(steps.template.output.path + '/.github/workflows/ci.yml') | string.replace('REGISTRY: "${{ values.registry }}"', 'REGISTRY: "' + parameters.registry + '"') }}
 
     - id: publish
       name: Publish to GitHub
