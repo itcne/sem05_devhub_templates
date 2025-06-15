@@ -4,6 +4,6 @@
 jmespath>=1.0.1
 {% for package in values.requiredPythonPackages %}
 {% if package %}
-{{ package }}
+${{ package }}
 {% endif %}
 {% endfor %}

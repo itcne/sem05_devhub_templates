@@ -9,10 +9,10 @@ collections:
 {% if collection %}
 {% if ':' in collection %}
 {% set parts = collection.split(':') %}
-  - name: "{{ parts[0] }}"
-    version: "{{ parts[1] }}"
+  - name: ${{ parts[0] }}
+    version: ${{ parts[1] }}
 {% else %}
-  - name: "{{ collection }}"
+  - name: ${{ collection }}
 {% endif %}
 {% endif %}
 {% endfor %}
