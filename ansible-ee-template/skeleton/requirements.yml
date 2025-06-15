@@ -2,10 +2,16 @@
 # Ansible Galaxy Collections required for this execution environment
 
 collections:
-{%- for collection in (values.requiredCollections | fromJson if values.requiredCollections is string else values.requiredCollections) -%}
-  {%- set parts = collection.split(':') -%}
+  # Core Ansible collections - recommended for most environments
+  - name: ansible.posix
+    version: ">=1.5.4"
+    
+{% for collection in values.requiredCollections %}
+{% if ':' in collection %}
+{% set parts = collection.split(':') %}
   - name: "{{ parts[0] }}"
-    {%- if parts|length > 1 %}
     version: "{{ parts[1] }}"
-    {%- endif %}
-{% endfor -%}
+{% else %}
+  - name: "{{ collection }}"
+{% endif %}
+{% endfor %}

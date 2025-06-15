@@ -46,11 +46,11 @@ spec:
         requiredCollections:
           title: Required Ansible Collections
           type: array
-          description: Ansible Galaxy collections to include with optional version constraints
+          description: Ansible Galaxy collections to include with optional version constraints. Use 'namespace.collection' for latest or 'namespace.collection:version' to pin versions.
           default: []
           items:
             type: string
-            description: Collection name in format namespace.collection or namespace.collection:version (e.g., community.general:>=7.0.0)
+            description: Collection name in format namespace.collection or namespace.collection:version (e.g., community.general:>=7.0.0, ansible.posix:1.5.4)
         requiredPythonPackages:
           title: Required Python Packages
           type: array
@@ -97,9 +97,9 @@ spec:
           name: ${{ parameters.name }}
           description: ${{ parameters.description }}
           owner: ${{ parameters.owner }}
-          requiredCollections: ${{ parameters.requiredCollections | dump }}
-          requiredPythonPackages: ${{ parameters.requiredPythonPackages | dump }}
-          systemPackages: ${{ parameters.systemPackages | dump }}
+          requiredCollections: ${{ parameters.requiredCollections }}
+          requiredPythonPackages: ${{ parameters.requiredPythonPackages }}
+          systemPackages: ${{ parameters.systemPackages }}
           baseImage: ${{ parameters.baseImage }}
           enableAutomatedBuilds: ${{ parameters.enableAutomatedBuilds }}
           registry: ${{ parameters.registry }}

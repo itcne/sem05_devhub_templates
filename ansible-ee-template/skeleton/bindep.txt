@@ -5,6 +5,8 @@ gcc [platform:rpm]
 python3-devel [platform:rpm]
 python3-pip [platform:rpm]
 
-{%- for package in (values.systemPackages | fromJson if values.systemPackages is string else values.systemPackages) -%}
+{% if values.systemPackages and values.systemPackages != '[]' %}
+{% for package in values.systemPackages %}
 {{ package }} [platform:rpm]
-{% endfor -%}
+{% endfor %}
+{% endif %}
