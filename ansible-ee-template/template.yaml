@@ -117,6 +117,7 @@ spec:
         defaultBranch: main
         repoVisibility: public
         protectDefaultBranch: false
+        gitCommitMessage: 'feat: initial commit for ${{ parameters.name }} execution environment'
 
     - id: register
       name: Register
