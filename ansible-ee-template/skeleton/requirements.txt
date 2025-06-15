@@ -2,10 +2,8 @@
 
 # Core dependencies - don't remove these
 jmespath>=1.0.1
-{% if values.requiredPythonPackages %}
 {% for package in values.requiredPythonPackages %}
 {% if package %}
-${{ package }}
+{{ package }}
 {% endif %}
 {% endfor %}
-{% endif %}

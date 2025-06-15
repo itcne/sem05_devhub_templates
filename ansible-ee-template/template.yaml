@@ -97,9 +97,9 @@ spec:
           name: ${{ parameters.name }}
           description: ${{ parameters.description }}
           owner: ${{ parameters.owner }}
-          requiredCollections: ${{ json parameters.requiredCollections | default([]) }}
-          requiredPythonPackages: ${{ json parameters.requiredPythonPackages | default([]) }}
-          systemPackages: ${{ json parameters.systemPackages | default([]) }}
+          requiredCollections: ${{ parameters.requiredCollections | default([]) }}
+          requiredPythonPackages: ${{ parameters.requiredPythonPackages | default([]) }}
+          systemPackages: ${{ parameters.systemPackages | default([]) }}
           baseImage: ${{ parameters.baseImage }}
           enableAutomatedBuilds: ${{ parameters.enableAutomatedBuilds }}
           registry: ${{ parameters.registry }}
