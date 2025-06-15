@@ -93,6 +93,9 @@ spec:
       action: fetch:template
       input:
         url: ./skeleton
+        copyWithoutTemplating:
+          - .github/workflows/ci.yml
+          - .github/workflows/testing.yml
         values:
           name: ${{ parameters.name }}
           description: ${{ parameters.description }}
