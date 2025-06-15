@@ -46,8 +46,8 @@ openssh [platform:rpm]
 
 ```bash
 # Build the image
-ansible-builder build -t {{ values.name }}:latest .
+ansible-builder build -t ${{ values.name | dump }}:latest .
 
 # Test the image
-ansible-navigator exec --execution-environment-image {{ values.name }}:latest -- ansible --version
+ansible-navigator exec --execution-environment-image ${{ values.name | dump }}:latest -- ansible --version
 ```

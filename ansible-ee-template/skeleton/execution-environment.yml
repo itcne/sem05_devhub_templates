@@ -3,7 +3,7 @@ version: 3
 
 images:
   base_image:
-    name: "{{ values.baseImage }}"
+    name: ${{ values.baseImage | dump }}
 
 options:
   user: '1000'
@@ -37,9 +37,9 @@ additional_build_steps:
   
   append_final: |
     # Create build information file for runtime inspection
-    RUN echo "=== {{ values.name }} Execution Environment Build Info ===" > /etc/ee-build-info.txt && \
+    RUN echo "=== ${{ values.name | dump }} Execution Environment Build Info ===" > /etc/ee-build-info.txt && \
         echo "Build date: $(date)" >> /etc/ee-build-info.txt && \
-        echo "Base image: {{ values.baseImage }}" >> /etc/ee-build-info.txt && \
+        echo "Base image: ${{ values.baseImage | dump }}" >> /etc/ee-build-info.txt && \
         echo "Python version: $(python3 --version)" >> /etc/ee-build-info.txt && \
         echo "Ansible version: $(ansible --version | head -1)" >> /etc/ee-build-info.txt && \
         echo "Installed collections:" >> /etc/ee-build-info.txt && \
