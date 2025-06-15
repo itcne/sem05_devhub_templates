@@ -4,8 +4,8 @@
 gcc [platform:rpm]
 python3-devel [platform:rpm]
 python3-pip [platform:rpm]
-{% for package in values.systemPackages %}
-{% if package %}
+{%- for package in values.systemPackages %}
+{%- if package %}
 ${{ package }} [platform:rpm]
-{% endif %}
-{% endfor %}
+{%- endif %}
+{%- endfor %}

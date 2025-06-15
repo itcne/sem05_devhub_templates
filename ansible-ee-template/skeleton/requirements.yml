@@ -5,14 +5,14 @@ collections:
   # Core Ansible collections - recommended for most environments
   - name: ansible.posix
     version: ">=1.5.4"
-{% for collection in values.requiredCollections %}
-{% if collection %}
-{% if ':' in collection %}
-{% set parts = collection.split(':') %}
+{%- for collection in values.requiredCollections %}
+{%- if collection %}
+{%- if ':' in collection %}
+{%- set parts = collection.split(':') %}
   - name: ${{ parts[0] }}
     version: ${{ parts[1] }}
-{% else %}
+{%- else %}
   - name: ${{ collection }}
-{% endif %}
-{% endif %}
-{% endfor %}
+{%- endif %}
+{%- endif %}
+{%- endfor %}
