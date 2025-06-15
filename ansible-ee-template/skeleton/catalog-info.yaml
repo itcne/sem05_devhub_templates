@@ -1,11 +1,11 @@
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
-  name: {{ values.name | replace('_', '-') | lower }}
-  title: {{ values.name }}
-  description: {{ values.description }}
+  name: ${{ values.name | replace('_', '-') | lower }}
+  title: ${{ values.name }}
+  description: ${{ values.description }}
   annotations:
-    github.com/project-slug: itcne/{{ values.name }}
+    github.com/project-slug: itcne/${{ values.name }}
     backstage.io/techdocs-ref: dir:.
   tags:
     - ansible
@@ -15,16 +15,16 @@ metadata:
 spec:
   type: service
   lifecycle: experimental
-  owner: {{ values.owner }}
+  owner: ${{ values.owner }}
   system: ansible-automation
   providesApis:
-    - {{ values.name }}-ee-api
+    - "${{ values.name }}-ee-api"
 
 ---
 apiVersion: backstage.io/v1alpha1
 kind: API
 metadata:
-  name: {{ values.name }}-ee-api
+  name: "${{ values.name }}-ee-api"
   description: Containerized Ansible Execution Environment for running playbooks
   tags:
     - ansible

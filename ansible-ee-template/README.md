@@ -16,10 +16,11 @@ This template helps you to quickly bootstrap a new Ansible Execution Environment
 ## Usage
 
 1. Use this template through the Developer Hub to create a new Ansible Execution Environment project
-2. Customize the generated files to match your specific requirements
-3. Build your execution environment using the included configuration
-4. Publish the execution environment to your container registry
-5. Use it in your Ansible automation workflows
+2. Select your preferred container registry (GitHub Container Registry, Docker Hub, or Quay.io)
+3. Customize the generated files to match your specific requirements
+4. Build your execution environment using the included configuration
+5. Publish the execution environment to your container registry
+6. Use it in your Ansible automation workflows
 
 ## Structure
 
@@ -27,6 +28,7 @@ This template helps you to quickly bootstrap a new Ansible Execution Environment
 - `requirements.txt` - Python dependencies
 - `requirements.yml` - Ansible collections
 - `bindep.txt` - System-level dependencies
+- `.github/workflows/ci.yml` - GitHub Actions workflow for automated building and publishing (configured for selected container registry)
 
 ## Source and Credits
 

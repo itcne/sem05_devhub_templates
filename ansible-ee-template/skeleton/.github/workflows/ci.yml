@@ -24,7 +24,7 @@ on:
         type: string
 
 env:
-  REGISTRY: {{ values.registry }}
+  REGISTRY: "ghcr.io"
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:

@@ -28,6 +28,15 @@ To add a new template to this collection:
    - `README.md`: Documents your template
    - `catalog-info.yaml`: Registers the template in the catalog
 
+### Template Variable Syntax
+
+When using template variables in your skeleton files, use the following syntax:
+
+- Standard variable: `${{ values.variableName }}`
+- With filters: `${{ values.variableName | function('arg') }}`
+- For conditional sections, use the JavaScript ternary syntax: `${{ condition ? 'true text' : 'false text' }}`
+- For files that need configuration but can't accept template variables (like GitHub Actions workflows), use string replacement in the template steps
+
 ## License
 
 This project is licensed under the terms specified in [LICENSE](./LICENSE).

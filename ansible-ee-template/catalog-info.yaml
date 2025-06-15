@@ -4,4 +4,4 @@ metadata:
   name: ansible-ee-template
 spec:
   type: url
-  target: https://github.com/itcne/ansible-ee-blueprint/blob/main/template.yaml
+  target: https://github.com/itcne/sem05_devhub_templates/blob/main/ansible-ee-template/template.yaml

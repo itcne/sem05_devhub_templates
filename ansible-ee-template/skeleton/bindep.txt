@@ -5,6 +5,4 @@ gcc [platform:rpm]
 python3-devel [platform:rpm]
 python3-pip [platform:rpm]
 
-{% for package in values.systemPackages %}
-{{ package }} [platform:rpm]
-{% endfor %}
+${{ values.systemPackages.map(package => `${package} [platform:rpm]`).join('\n') }}

@@ -6,6 +6,4 @@ collections:
   - name: ansible.posix
     version: ">=1.5.4"
 
-{% for collection in values.requiredCollections %}
-  - name: {{ collection }}
-{% endfor %}
+${{ values.requiredCollections.map(collection => `  - name: ${collection}`).join('\n') }}
