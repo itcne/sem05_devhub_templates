@@ -7,11 +7,13 @@ collections:
     version: ">=1.5.4"
     
 {% for collection in values.requiredCollections %}
+{% if collection %}
 {% if ':' in collection %}
 {% set parts = collection.split(':') %}
   - name: "{{ parts[0] }}"
     version: "{{ parts[1] }}"
 {% else %}
   - name: "{{ collection }}"
+{% endif %}
 {% endif %}
 {% endfor %}

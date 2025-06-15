@@ -4,11 +4,9 @@
 jmespath>=1.0.1
 
 {% if values.requiredPythonPackages %}
-{% if values.requiredPythonPackages is iterable and values.requiredPythonPackages is not string %}
 {% for package in values.requiredPythonPackages %}
-{% if package and package.strip() %}
-{{ package.strip() }}
+{% if package %}
+{{ package }}
 {% endif %}
 {% endfor %}
-{% endif %}
 {% endif %}

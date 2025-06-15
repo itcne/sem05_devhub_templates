@@ -6,11 +6,9 @@ python3-devel [platform:rpm]
 python3-pip [platform:rpm]
 
 {% if values.systemPackages %}
-{% if values.systemPackages is iterable and values.systemPackages is not string %}
 {% for package in values.systemPackages %}
-{% if package and package.strip() %}
-{{ package.strip() }} [platform:rpm]
+{% if package %}
+{{ package }} [platform:rpm]
 {% endif %}
 {% endfor %}
-{% endif %}
 {% endif %}
