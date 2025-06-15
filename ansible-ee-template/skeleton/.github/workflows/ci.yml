@@ -158,7 +158,12 @@ jobs:
           # Case 1: Manual input from workflow_dispatch
           if [ -n "${{ inputs.version }}" ]; then
             version="${{ inputs.version }}"
-            version_tag="${{ inputs.version_tag || format('v{0}', inputs.version) }}"
+            version_tag=""
+            if [ -n "${{ inputs.version_tag }}" ]; then
+              version_tag="${{ inputs.version_tag }}"
+            else
+              version_tag="v${{ inputs.version }}"
+            fi
             is_release="true"
             echo "Using manually specified version: $version_tag"
           
