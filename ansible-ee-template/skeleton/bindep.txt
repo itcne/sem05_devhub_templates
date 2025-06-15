@@ -5,8 +5,12 @@ gcc [platform:rpm]
 python3-devel [platform:rpm]
 python3-pip [platform:rpm]
 
-{% if values.systemPackages and values.systemPackages != '[]' %}
+{% if values.systemPackages %}
+{% if values.systemPackages is iterable and values.systemPackages is not string %}
 {% for package in values.systemPackages %}
-{{ package }} [platform:rpm]
+{% if package and package.strip() %}
+{{ package.strip() }} [platform:rpm]
+{% endif %}
 {% endfor %}
+{% endif %}
 {% endif %}
