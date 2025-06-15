@@ -3,6 +3,6 @@
 # Core dependencies - don't remove these
 jmespath>=1.0.1
 
-{% for package in values.requiredPythonPackages %}
+{%- for package in (values.requiredPythonPackages | fromJson if values.requiredPythonPackages is string else values.requiredPythonPackages) -%}
 {{ package }}
-{% endfor %}
+{% endfor -%}
