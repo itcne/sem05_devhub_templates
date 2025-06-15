@@ -8,7 +8,7 @@ python3-pip [platform:rpm]
 {% for package in values.systemPackages %}
 {% if package %}
 
-{{ package }} [platform:rpm]
+${{ package }} [platform:rpm]
 {% endif %}
 {% endfor %}
 {% endif %}
